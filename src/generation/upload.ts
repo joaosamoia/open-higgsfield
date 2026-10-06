@@ -1,22 +1,33 @@
-import { put } from "@vercel/blob/client";
+import { put } from "@vercel/blob";
+import { NextResponse } from "next/server";
 
-export async function uploadMedia(file: File): Promise<{ url: string }> {
-  const res = await fetch("/api/blob", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      type: "blob.generate-client-token",
-      payload: { pathname: file.name, clientPayload: null, multipart: false },
-    }),
+const ALLOWED = new Set([
+  "image/jpeg", "image/png", "image/webp", "image/gif",
+  "video/mp4", "audio/wav", "audio/x-wav",
+]);
+const MAX_BYTES = 4 * 1024 * 1024;
+
+export async function POST(request: Request) {
+  const token = process.env.OPEN_HIGGSFIELD_READ_WRITE_TOKEN;
+  if (!token) return NextResponse.json({ error: "Blob not configured" }, { status: 500 });
+
+  const form = await request.formData();
+  const file = form.get("file");
+  if (!(file instanceof File)) return NextResponse.json({ error: "No file" }, { status: 400 });
+  if (!ALLOWED.has(file.type)) return NextResponse.json({ error: "File type not allowed" }, { status: 415 });
+  if (file.size > MAX_BYTES) return NextResponse.json({ error: "File too large" }, { status: 413 });
+
+  const safeName =
+    file.name
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "_")
+      .slice(-80) || "upload";
+  const blob = await put(`uploads/${safeName}`, file, {
+    access: "public",
+    addRandomSuffix: true,
+    contentType: file.type,
+    token,
   });
-  if (!res.ok) throw new Error("Failed to retrieve the client token");
-  const { clientToken, pathname } = (await res.json()) as {
-    clientToken?: unknown;
-    pathname?: unknown;
-  };
-  if (typeof clientToken !== "string" || typeof pathname !== "string") {
-    throw new Error("Failed to retrieve the client token");
-  }
-  const blob = await put(pathname, file, { access: "public", token: clientToken });
-  return { url: blob.url };
+  return NextResponse.json({ url: blob.url });
 }
