@@ -1,33 +1,37 @@
-import { put } from "@vercel/blob";
-import { NextResponse } from "next/server";
+import { put } from "@vercel/blob/client";
 
-const ALLOWED = new Set([
-  "image/jpeg", "image/png", "image/webp", "image/gif",
-  "video/mp4", "audio/wav", "audio/x-wav",
-]);
-const MAX_BYTES = 4 * 1024 * 1024;
+const SERVER_UPLOAD_MAX = 4 * 1024 * 1024;
 
-export async function POST(request: Request) {
-  const token = process.env.OPEN_HIGGSFIELD_READ_WRITE_TOKEN;
-  if (!token) return NextResponse.json({ error: "Blob not configured" }, { status: 500 });
+export async function uploadMedia(file: File): Promise<{ url: string }> {
+  if (file.size <= SERVER_UPLOAD_MAX) {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: form });
+    const data = (await res.json().catch(() => ({}))) as { url?: unknown; error?: unknown };
+    if (res.ok && typeof data.url === "string") return { url: data.url };
+    throw new Error(typeof data.error === "string" ? data.error : "Upload failed");
+  }
 
-  const form = await request.formData();
-  const file = form.get("file");
-  if (!(file instanceof File)) return NextResponse.json({ error: "No file" }, { status: 400 });
-  if (!ALLOWED.has(file.type)) return NextResponse.json({ error: "File type not allowed" }, { status: 415 });
-  if (file.size > MAX_BYTES) return NextResponse.json({ error: "File too large" }, { status: 413 });
-
-  const safeName =
-    file.name
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-zA-Z0-9._-]+/g, "_")
-      .slice(-80) || "upload";
-  const blob = await put(`uploads/${safeName}`, file, {
-    access: "public",
-    addRandomSuffix: true,
-    contentType: file.type,
-    token,
+  const res = await fetch("/api/blob", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "blob.generate-client-token",
+      payload: { pathname: file.name, clientPayload: null, multipart: true },
+    }),
   });
-  return NextResponse.json({ url: blob.url });
+  if (!res.ok) throw new Error("Failed to retrieve the client token");
+  const { clientToken, pathname } = (await res.json()) as {
+    clientToken?: unknown;
+    pathname?: unknown;
+  };
+  if (typeof clientToken !== "string" || typeof pathname !== "string") {
+    throw new Error("Failed to retrieve the client token");
+  }
+  const blob = await put(pathname, file, {
+    access: "public",
+    token: clientToken,
+    multipart: true,
+  });
+  return { url: blob.url };
 }
