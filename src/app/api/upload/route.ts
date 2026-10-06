@@ -8,7 +8,7 @@ const ALLOWED = new Set([
 const MAX_BYTES = 4 * 1024 * 1024;
 
 export async function POST(request: Request) {
-  const token = process.env.OPEN_HIGGSFIELD_READ_WRITE_TOKEN;
+  const token = process.env.BLOB_READ_WRITE_TOKEN ?? process.env.OPEN_HIGGSFIELD_READ_WRITE_TOKEN;
   if (!token) return NextResponse.json({ error: "Blob not configured" }, { status: 500 });
 
   const form = await request.formData();
