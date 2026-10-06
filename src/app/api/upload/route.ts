@@ -23,11 +23,17 @@ export async function POST(request: Request) {
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-zA-Z0-9._-]+/g, "_")
       .slice(-80) || "upload";
-  const blob = await put(`uploads/${safeName}`, file, {
-    access: "public",
-    addRandomSuffix: true,
-    contentType: file.type,
-    token,
-  });
-  return NextResponse.json({ url: blob.url });
+  try {
+    const blob = await put(`uploads/${safeName}`, file, {
+      access: "public",
+      addRandomSuffix: true,
+      contentType: file.type,
+      token,
+    });
+    return NextResponse.json({ url: blob.url });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[upload] failed", message);
+    return NextResponse.json({ error: `Blob: ${message}` }, { status: 500 });
+  }
 }
