@@ -13,6 +13,7 @@ const MAP: Record<string, Mapper> = {
   "kling-3-4k": (plane) => mapKling3(plane, "kling-video/v3.0/4k"),
   "kling-3-motion-std": (plane) => mapKlingMotion(plane, "kling-video/v3/motion-control/std"),
   "kling-3-motion-pro": (plane) => mapKlingMotion(plane, "kling-video/v3/motion-control/pro"),
+  "genjutsu-motion-transfer": mapGenjutsu,
   "seedance-2": (plane) => mapSeedance(plane, "bytedance/seedance-2.0"),
   "seedance-2-fast": (plane) => mapSeedance(plane, "bytedance/seedance-2.0/fast"),
   "seedance-2-mini": (plane) => mapSeedance(plane, "bytedance/seedance-2.0/mini"),
@@ -93,7 +94,21 @@ function mapKlingMotion(plane: GenerationPlane, path: string): Mapped {
     },
   };
 }
-
+  function mapGenjutsu(plane: GenerationPlane): Mapped {
+    const video = urls(plane, "video")[0];
+    const refs = urls(plane, "reference");
+    if (!video) throw new Error("Genjutsu needs a source video (4s minimum)");
+    if (!refs.length) throw new Error("Genjutsu needs at least one reference image");
+    return {
+      path: "higgsfield/genjutsu/motion-transfer/v1.0",
+      body: {
+        prompt: plane.prompt.text,
+        video_url: video,
+        image_urls: refs.slice(0, 8),
+        resolution: plane.settings.resolution ?? "720p",
+      },
+    };
+  }
 function mapByPaths(plane: GenerationPlane, spec: PlatformPaths): Mapped {
   const start = urls(plane, "start")[0];
   const end = urls(plane, "end")[0];
